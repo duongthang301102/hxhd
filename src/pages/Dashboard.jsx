@@ -2,26 +2,13 @@ import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { LayoutGrid, List, Edit, Trash2, CalendarDays, Calendar, ChevronDown, Search } from 'lucide-react';
 
-// --- THÊM STYLE CHO THANH CUỘN (SCROLLBAR) ---
-// Bạn có thể để vào file CSS global, nhưng để ở đây cho tiện test
 const customScrollbarStyle = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 4px; /* Chiều rộng thanh cuộn siêu nhỏ */
-    height: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent; /* Nền trong suốt */
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1; /* Màu xám nhạt (slate-300) */
-    border-radius: 10px; /* Bo tròn */
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8; /* Hover đậm hơn chút (slate-400) */
-  }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 `;
 
-// --- COMPONENT HIỂN THỊ DẠNG DANH SÁCH (TABLE) ---
 const SchoolListView = ({ schools, onEdit, onDelete, onViewDetail }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-[#e7edf3] overflow-hidden animate-in fade-in duration-500 h-full flex flex-col">
@@ -62,18 +49,19 @@ const SchoolListView = ({ schools, onEdit, onDelete, onViewDetail }) => {
   );
 };
 
-// --- COMPONENT CARD (KANBAN) ---
+// --- FIX LỖI Ở COMPONENT NÀY ---
 const SchoolCard = ({ schoolData, onEdit, onDelete, onClick }) => {
   const { name, students, address, status } = schoolData;
+  
+  // FIX: Kiểm tra nếu students là Mảng thì lấy length, nếu là số thì giữ nguyên
+  const studentCount = Array.isArray(students) ? students.length : (students || 0);
+
   let statusClass = "text-slate-400 bg-slate-50";
   if (status === "Hoàn thành") statusClass = "text-green-600 bg-green-50";
   if (status === "Đang chờ") statusClass = "text-amber-600 bg-amber-50";
 
   return (
-    <div 
-        onClick={onClick} 
-        className="relative bg-white rounded-xl shadow-sm border border-transparent hover:border-primary/30 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group cursor-pointer shrink-0 select-none mb-1 mx-1"
-    >
+    <div onClick={onClick} className="relative bg-white rounded-xl shadow-sm border border-transparent hover:border-primary/30 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group cursor-pointer shrink-0 select-none mb-1 mx-1">
       <div className="absolute top-3 right-3 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <button onClick={(e) => { e.stopPropagation(); onEdit(schoolData); }} className="p-1.5 rounded-full bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-primary border border-slate-100 shadow-sm transition-colors"><Edit size={14}/></button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(schoolData.id); }} className="p-1.5 rounded-full bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 border border-slate-100 shadow-sm transition-colors"><Trash2 size={14}/></button>
@@ -81,7 +69,8 @@ const SchoolCard = ({ schoolData, onEdit, onDelete, onClick }) => {
       <div className="block p-4">
         <div className="flex justify-between items-start mb-3 pr-14"><h4 className="text-sm font-bold text-[#0d141b] leading-tight line-clamp-2">{name}</h4></div>
         <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-xs text-[#4c739a]"><span className="material-symbols-outlined text-[16px]">groups</span><span>{students} học sinh</span></div>
+            {/* Sửa hiển thị số lượng ở đây */}
+            <div className="flex items-center gap-2 text-xs text-[#4c739a]"><span className="material-symbols-outlined text-[16px]">groups</span><span>{studentCount} học sinh</span></div>
             <div className="flex items-center gap-2 text-xs text-[#4c739a]"><span className="material-symbols-outlined text-[16px]">location_on</span><span className="truncate max-w-[150px]">{address}</span></div>
             <div className="mt-2 pt-2 border-t border-slate-50 flex justify-between items-center"><span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${statusClass}`}>{status}</span></div>
         </div>
@@ -90,12 +79,9 @@ const SchoolCard = ({ schoolData, onEdit, onDelete, onClick }) => {
   );
 };
 
-// --- CỘT NGÀY ---
 const DateColumn = ({ day, dateFull, count, isToday, children }) => {
     return (
       <div className={`min-w-[220px] max-w-[220px] flex flex-col h-full gap-0 snap-start select-none transition-opacity duration-500 ${children.length === 0 ? 'opacity-60 hover:opacity-100' : 'opacity-100'}`}>
-        
-        {/* HEADER CỘT: Cố định phía trên */}
         <div className={`flex shrink-0 items-center justify-between px-3 py-2 rounded-t-lg border-b transition-colors mb-2 ${isToday ? 'bg-blue-50 border-blue-100' : 'bg-transparent border-transparent'}`}>
           <div className="flex items-center gap-2">
              <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-lg ${isToday ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-white border border-slate-200 text-slate-600'}`}>
@@ -109,12 +95,6 @@ const DateColumn = ({ day, dateFull, count, isToday, children }) => {
           </div>
           {children.length > 0 && <span className="size-2 rounded-full bg-green-500"></span>}
         </div>
-        
-        {/* NỘI DUNG CỘT: Cuộn độc lập (FIX 1 & 2) */}
-        {/* flex-1: Chiếm hết chiều cao còn lại */}
-        {/* overflow-y-auto: Tự cuộn khi quá dài */}
-        {/* custom-scrollbar: Class style thanh cuộn đẹp */}
-        {/* pb-20: Padding đáy lớn để không bị cắt bóng đổ của card cuối */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-1 pb-20 pt-2 flex flex-col gap-3">
             {children}
             {children.length === 0 && (<div className="h-24 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 text-xs">Trống</div>)}
@@ -123,7 +103,6 @@ const DateColumn = ({ day, dateFull, count, isToday, children }) => {
     );
 };
 
-// --- DASHBOARD CHÍNH ---
 const Dashboard = () => {
   const scrollRef = useRef(null);
   const [showLeftBtn, setShowLeftBtn] = useState(false);
@@ -140,10 +119,30 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { schools, openAddModal, openEditModal, deleteSchool } = useOutletContext(); 
 
-  const SCROLL_AMOUNT = 244; 
+  const COL_WIDTH = 220; 
+  const GAP = 24;       
+  const SCROLL_AMOUNT = COL_WIDTH + GAP; 
+
   const scroll = (direction) => { if (scrollRef.current) scrollRef.current.scrollBy({ left: direction === 'left' ? -SCROLL_AMOUNT : SCROLL_AMOUNT, behavior: 'smooth' }); };
   const handleScroll = () => { if (scrollRef.current) { const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current; setShowLeftBtn(scrollLeft > 5); setShowRightBtn(Math.ceil(scrollLeft + clientWidth) < scrollWidth - 1); } };
-  useLayoutEffect(() => { if (scrollRef.current) { scrollRef.current.scrollLeft = 0; setShowLeftBtn(false); } }, [viewMode, selectedMonth, selectedYear]); 
+  
+  useLayoutEffect(() => {
+    if (scrollRef.current) {
+        const today = new Date();
+        const realYear = today.getFullYear();
+        const realMonth = today.getMonth() + 1;
+        const realDay = today.getDate();
+
+        if (parseInt(selectedYear) === realYear && parseInt(selectedMonth) === realMonth) {
+            const scrollPosition = (realDay - 1) * SCROLL_AMOUNT;
+            scrollRef.current.scrollLeft = scrollPosition;
+        } else {
+            scrollRef.current.scrollLeft = 0;
+        }
+        setShowLeftBtn(scrollRef.current.scrollLeft > 5);
+    }
+  }, [viewMode, selectedMonth, selectedYear]); 
+
   useEffect(() => { const el = scrollRef.current; if (el) el.addEventListener('scroll', handleScroll); return () => el?.removeEventListener('scroll', handleScroll); }, []);
 
   const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
@@ -161,9 +160,8 @@ const Dashboard = () => {
 
   return (
     <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-300">
-      <style>{customScrollbarStyle}</style> {/* Inject CSS Thanh cuộn */}
+      <style>{customScrollbarStyle}</style>
 
-      {/* FILTER BAR */}
       <div className="px-6 py-4 flex flex-wrap items-center justify-between bg-white border-b border-[#e7edf3] shrink-0 gap-4 shadow-sm z-20">
          <div className="flex items-center gap-4 flex-1">
             <div className="flex flex-col min-w-[120px]">
@@ -204,7 +202,6 @@ const Dashboard = () => {
          </div>
       </div>
 
-      {/* CONTENT AREA */}
       <div className="flex-1 overflow-hidden bg-background-light relative">
         {viewMode === 'list' && (
             <div className="h-full overflow-hidden p-6 animate-in slide-in-from-bottom-2 duration-300">

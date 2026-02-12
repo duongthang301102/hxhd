@@ -1,79 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import SchoolModal from '../components/SchoolModal';
+import { PhoneCall } from 'lucide-react';
+
+// --- FIREBASE IMPORTS ---
+import { db } from '../firebase';
+import { ref, onValue, set, remove, update } from "firebase/database";
 
 const MainLayout = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSchool, setEditingSchool] = useState(null); // Lưu trường đang sửa
+  const [editingSchool, setEditingSchool] = useState(null);
 
-  // Dữ liệu mẫu
-  const [schools, setSchools] = useState([
-    { id: 1, name: "TH Tiểu học Kim Đồng", students: 420, address: "Quận 1, TP.HCM", status: "Hoàn thành", date: "2024-01-12", month: 1, phone: "090123456", manager_name: "Cô Lan", expected_date: "2024-01-12", student_count: 420 },
-    { id: 2, name: "THCS Lê Quý Đôn", students: 650, address: "Quận 3, TP.HCM", status: "Đang chờ", date: "2024-01-25", month: 1, phone: "0909888777", manager_name: "Thầy Hùng", expected_date: "2024-01-25", student_count: 650 },
-  ]);
+  // State schools ban đầu là mảng rỗng, đợi Firebase load về
+  const [schools, setSchools] = useState([]);
 
-  // 1. Hàm mở Modal Thêm mới
+  // --- 1. LẮNG NGHE DỮ LIỆU TỪ FIREBASE (REALTIME) ---
+  useEffect(() => {
+    const schoolsRef = ref(db, 'schools');
+    
+    // onValue sẽ chạy mỗi khi dữ liệu trên Firebase thay đổi
+    const unsubscribe = onValue(schoolsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        // Firebase trả về Object (key: value), ta chuyển thành Array để React dễ dùng
+        // Object.values(data) sẽ lấy ra mảng các school
+        const schoolsArray = Object.keys(data).map(key => ({
+            ...data[key],
+            id: key // Đảm bảo ID khớp với Key trên Firebase
+        }));
+        setSchools(schoolsArray);
+      } else {
+        setSchools([]); // Nếu xóa hết thì set về rỗng
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup khi component unmount
+  }, []);
+
+  // 2. Hàm mở Modal Thêm mới
   const handleOpenAdd = () => {
-    setEditingSchool(null); // Reset về thêm mới
+    setEditingSchool(null);
     setIsModalOpen(true);
   };
 
-  // 2. Hàm mở Modal Sửa
+  // 3. Hàm mở Modal Sửa
   const handleOpenEdit = (school) => {
     setEditingSchool({
         ...school,
-        student_count: school.students,
+        student_count: school.students ? (Array.isArray(school.students) ? school.students.length : school.students) : 0,
         expected_date: school.date,
     });
     setIsModalOpen(true);
   };
 
-  // 3. Hàm Xử lý Lưu (CẬP NHẬT LOGIC MỚI Ở ĐÂY)
-  // Hàm này giờ thông minh hơn: nhận vào 1 Object (khi sửa) HOẶC 1 Mảng (khi thêm nhiều ngày)
+  // --- 4. XỬ LÝ LƯU (THÊM/SỬA) LÊN FIREBASE ---
   const handleSaveSchool = (dataReceived) => {
     if (editingSchool) {
-      // --- LOGIC SỬA (dataReceived là 1 object) ---
-      setSchools(prev => prev.map(s => s.id === editingSchool.id ? {
-        ...s,
-        ...dataReceived,
-        students: dataReceived.student_count,
+      // --- LOGIC SỬA: Đẩy update lên Firebase ---
+      const updatedData = {
+        ...editingSchool, // Giữ lại data cũ
+        ...dataReceived,  // Ghi đè data mới
+        students: dataReceived.student_count || 0, // Lưu tạm số lượng
         date: dataReceived.expected_date,
-      } : s));
+        // Nếu có students array cũ thì giữ nguyên, không để bị mất
+        students: editingSchool.students || [] 
+      };
+
+      // Update node cụ thể trên Firebase
+      update(ref(db, `schools/${editingSchool.id}`), updatedData)
+        .then(() => console.log("Đã cập nhật thành công"))
+        .catch((err) => alert("Lỗi cập nhật: " + err));
+
     } else {
-      // --- LOGIC THÊM MỚI (dataReceived có thể là MẢNG do chọn range ngày) ---
-      
-      // Chuyển đổi thành mảng nếu nó chưa phải là mảng (để xử lý thống nhất)
+      // --- LOGIC THÊM MỚI: Đẩy set mới lên Firebase ---
       const inputData = Array.isArray(dataReceived) ? dataReceived : [dataReceived];
 
-      const newSchoolsArray = inputData.map(item => ({
-        ...item,
-        // Map lại các trường cho khớp với cấu trúc hiển thị Dashboard
-        id: item.id || (Date.now() + Math.random()), // Đảm bảo luôn có ID
-        students: item.student_count,
-        status: "Chưa bắt đầu",
-        date: item.expected_date, 
-      }));
+      inputData.forEach(item => {
+        // Tạo ID duy nhất (dùng timestamp cho đơn giản và unique)
+        // Lưu ý: ID phải là String để làm Key trên Firebase
+        const newId = `school_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        
+        const newSchool = {
+            ...item,
+            id: newId,
+            students: item.student_count || [],
+            status: "Chưa bắt đầu",
+            date: item.expected_date,
+        };
 
-      // Thêm toàn bộ mảng mới vào state cũ
-      setSchools(prev => [...prev, ...newSchoolsArray]);
+        // Ghi dữ liệu mới vào path schools/newId
+        set(ref(db, `schools/${newId}`), newSchool);
+      });
     }
   };
 
-  // 4. Hàm Xóa
+  // --- 5. XÓA TRÊN FIREBASE ---
   const handleDeleteSchool = (id) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa điểm trường này không?")) {
-      setSchools(prev => prev.filter(s => s.id !== id));
+    if (window.confirm("Bạn có chắc chắn muốn xóa điểm trường này không? Dữ liệu trên Firebase sẽ mất vĩnh viễn.")) {
+      remove(ref(db, `schools/${id}`))
+        .catch(err => alert("Lỗi khi xóa: " + err));
     }
   };
 
-  // 5. Hàm Cập nhật trạng thái (Dùng cho trang Chi tiết gọi ngược lên)
+  // --- 6. UPDATE (DÙNG CHO SCHOOL DETAIL & TELESALE) ---
   const updateSchool = (updatedData) => {
-    setSchools(prev => prev.map(s => s.id === updatedData.id ? { ...s, ...updatedData } : s));
+    // Chỉ update những trường thay đổi lên Firebase
+    update(ref(db, `schools/${updatedData.id}`), updatedData);
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background-light text-[#0d141b]">
-      {/* Component Modal */}
       <SchoolModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
@@ -98,6 +134,13 @@ const MainLayout = () => {
                   <span className="material-symbols-outlined text-[24px]">list_alt</span>
                   <span className="text-sm font-semibold">Danh sách</span>
                 </Link>
+                
+                {/* MENU TELESALE */}
+                <Link to="/telesale" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#4c739a] hover:bg-slate-100 transition-colors focus:bg-primary/10 focus:text-primary">
+                  <PhoneCall size={24} />
+                  <span className="text-sm font-medium">Telesale</span>
+                </Link>
+
                 <Link to="/reports" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[#4c739a] hover:bg-slate-100 transition-colors">
                   <span className="material-symbols-outlined text-[24px]">bar_chart</span>
                   <span className="text-sm font-medium">Báo cáo</span>
@@ -128,7 +171,6 @@ const MainLayout = () => {
           </div>
         </header>
 
-        {/* QUAN TRỌNG: Truyền updateSchool xuống Dashboard và SchoolDetail */}
         <Outlet context={{ 
           schools, 
           openAddModal: handleOpenAdd, 

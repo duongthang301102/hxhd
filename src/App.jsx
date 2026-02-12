@@ -4,19 +4,20 @@ import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import SchoolDetail from './pages/SchoolDetail'; // <--- Import mới
+import Telesale from './pages/Telesale';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        
+        {/* MainLayout bao trùm tất cả các trang con */}
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Dashboard />} />
-          {/* Route chi tiết trường học (dùng id động) */}
-          <Route path="school/:id" element={<SchoolDetail />} /> 
           
-          <Route path="schools" element={<div>Trang danh sách trường</div>} />
+          {/* Đưa SchoolDetail vào bên trong MainLayout */}
+          <Route path="school/:id" element={<SchoolDetail />} />
+          
+          <Route path="telesale" element={<Telesale />} />
         </Route>
       </Routes>
     </BrowserRouter>
